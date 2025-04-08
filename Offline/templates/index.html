@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Offline HF Radio Simulator</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/leaflet.css') }}"/>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Offline HF Radio Simulator</h1>
+            <button id="theme-toggle" type="button" title="Toggle theme">
+                <span>☀️</span>
+            </button>
+        </header>
+
+        <div class="main-content">
+            <div class="input-column">
+                <h2>Parameters</h2>
+
+                <div class="input-group">
+                    <h3>Transmitter Location (Lat/Lon)</h3>
+                    <div class="input-row">
+                        <input type="number" id="txLat" placeholder="Latitude" step="any" value="35.17">
+                        <input type="number" id="txLon" placeholder="Longitude" step="any" value="-79.41">
+                    </div>
+                     <h3>Receiver Location (Lat/Lon)</h3>
+                     <div class="input-row">
+                        <input type="number" id="rxLat" placeholder="Latitude" step="any" value="40.71">
+                        <input type="number" id="rxLon" placeholder="Longitude" step="any" value="-74.00">
+                    </div>
+                </div>
+
+                <div class="input-group">
+                     <h3>Simulation Settings</h3>
+                     <div>
+                        <label for="txPower">Tx Power (Watts)</label>
+                        <input type="number" id="txPower" placeholder="e.g., 100" step="any" min="0.1" value="100">
+                    </div>
+                     <div class="input-row">
+                        <div>
+                            <label for="startFreq">Start Freq (MHz)</label>
+                            <input type="number" id="startFreq" placeholder="7.0" step="0.1" min="1.8" max="30" value="7.0">
+                        </div>
+                         <div>
+                            <label for="endFreq">End Freq (MHz)</label>
+                            <input type="number" id="endFreq" placeholder="14.3" step="0.1" min="1.8" max="30" value="14.3">
+                        </div>
+                         <div>
+                            <label for="freqSteps">Steps</label>
+                            <input type="number" id="freqSteps" placeholder="5" step="1" min="1" max="100" value="10">
+                        </div>
+                    </div>
+                    <div class="input-row">
+                         <div>
+                            <label for="sfi">SFI</label>
+                            <input type="number" id="sfi" step="1" min="60" max="350" value="{{ default_sfi }}">
+                         </div>
+                         <div>
+                            <label for="ssn">SSN</label>
+                            <input type="number" id="ssn" step="1" min="0" max="400" value="{{ default_ssn }}">
+                         </div>
+                         <div>
+                            <label for="kp">Kp Index</label>
+                            <input type="number" id="kp" step="1" min="0" max="9" value="{{ default_kp }}">
+                         </div>
+                    </div>
+                     <p class="note">Simulation uses current system UTC time.</p>
+                </div>
+
+                 <div class="input-group">
+                     <h3>Antennas & Noise</h3>
+                     <div class="input-row">
+                         <div>
+                            <label for="txAntennaType">Tx Antenna Type</label>
+                            <select id="txAntennaType">
+                                <option>Dipole</option>
+                                <option>Vertical</option>
+                                <option>Yagi (Simple)</option>
+                            </select>
+                         </div>
+                         <div>
+                            <label for="txAntennaHeight">Tx Height</label>
+                            <select id="txAntennaHeight">
+                                <option>Low (&lt;0.25λ)</option>
+                                <option selected>Medium (≈0.5λ)</option>
+                                <option>High (&gt;0.75λ)</option>
+                            </select>
+                         </div>
+                     </div>
+                     <div class="input-row">
+                          <div>
+                            <label for="rxAntennaType">Rx Antenna Type</label>
+                            <select id="rxAntennaType">
+                                <option>Dipole</option>
+                                <option selected>Vertical</option>
+                                <option>Yagi (Simple)</option>
+                            </select>
+                         </div>
+                         <div>
+                            <label for="rxAntennaHeight">Rx Height</label>
+                            <select id="rxAntennaHeight">
+                                <option>Low (&lt;0.25λ)</option>
+                                <option selected>Medium (≈0.5λ)</option>
+                                <option>High (&gt;0.75λ)</option>
+                            </select>
+                         </div>
+                     </div>
+                     <div>
+                        <label for="noiseEnvironment">Receiver Noise Environment</label>
+                        <select id="noiseEnvironment">
+                            <option value="Quiet Rural">Quiet Rural</option>
+                            <option value="Rural">Rural</option>
+                            <option value="Residential" selected>Residential</option>
+                            <option value="Urban">Urban</option>
+                            <option value="Industrial">Industrial</option>
+                        </select>
+                    </div>
+                 </div>
+
+                <button id="simulateBtn">Run Simulation</button>
+                 <div id="loadingIndicator" class="loader"></div>
+                 <div id="messageBox" class="message-box" style="display: none;"></div>
+            </div>
+
+            <div class="output-column">
+                 <h2>Results</h2>
+
+                 <div id="singleResultDisplay" class="results-grid">
+                    <div><strong>Distance:</strong> <span id="distanceResult">-</span> km</div>
+                    <div><strong>Skywave Path Likelihood:</strong> <span id="likelihoodResult" class="likelihood-indicator">-</span></div>
+                    <div><strong>Skywave SNR (Est.):</strong> <span id="skyWaveResult">-</span> dB</div>
+                    <div><strong>Ground Wave SNR (Est.):</strong> <span id="groundWaveResult">-</span> dB</div>
+                 </div>
+
+                 <div id="resultsTableContainer" class="table-container" style="display: none;">
+                     <table id="resultsTable">
+                        <thead>
+                            <tr>
+                                <th>Freq (MHz)</th>
+                                <th>GW SNR (dB)</th>
+                                <th>Mode</th>
+                                <th>Absorp (dB)</th>
+                                <th>SW Loss (dB)</th>
+                                <th>SW SNR (dB)</th>
+                                <th>Likelihood</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            </tbody>
+                    </table>
+                 </div>
+
+                 <p class="note">Note: SNR estimates use simplified models. Assumes ~3kHz bandwidth.</p>
+
+                 <h3>Calculation Details (Center Frequency)</h3>
+                 <div id="calcDetailsContainer" class="calc-details">
+                    <p>Run simulation to see calculation details.</p>
+                 </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/lib/leaflet.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>
