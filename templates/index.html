@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HF Radio Transmission Simulator (Flask)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+          integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+          crossorigin=""/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+            integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+            crossorigin=""></script>
+    <script src='https://unpkg.com/@turf/turf@6/turf.min.js'></script>
+    <style>
+      /* Keep font-face for potential other icons, or remove if unused */
+      @font-face {
+        font-family: 'LucideIcons';
+        src: url(https://cdn.jsdelivr.net/npm/lucide-static@latest/font/Lucide.ttf) format('truetype');
+        font-display: block;
+      }
+      .lucide { /* Style for potential other font icons */
+        font-family: 'LucideIcons';
+        font-size: 1.25rem; line-height: 1; display: inline-block;
+        vertical-align: middle; font-style: normal; font-weight: normal;
+        speak: none; text-decoration: inherit; text-transform: none;
+        text-rendering: optimizeLegibility; -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+      }
+      /* SVG icon styling helper */
+      .icon-sm {
+          width: 1.25em; /* Match typical font icon size */
+          height: 1.25em;
+          display: inline-block;
+          vertical-align: middle;
+          /* stroke: currentColor; /* Inherit text color for stroke */ */
+          /* fill: none; /* Ensure SVG isn't filled if stroke is intended */ */
+      }
+      #map { height: 400px; width: 100%; z-index: 0; }
+      .leaflet-popup-content-wrapper { border-radius: 8px; }
+      .leaflet-popup-content { margin: 10px !important; font-family: 'Inter', sans-serif; }
+      .likelihood-indicator { padding: 2px 8px; border-radius: 4px; font-weight: 600; color: white; text-align: center; display: inline-block; }
+      .likelihood-good { background-color: #10B981; } .likelihood-fair { background-color: #F59E0B; } .likelihood-poor { background-color: #EF4444; }
+      .path-base { fill: none; }
+      .path-ground-good { stroke: #16A34A; stroke-width: 2; } .path-ground-poor { stroke: #DC2626; stroke-width: 2; }
+      .path-sky-good { stroke: #10B981; stroke-width: 3; stroke-dasharray: 5, 5; } .path-sky-fair { stroke: #F59E0B; stroke-width: 3; stroke-dasharray: 5, 5; } .path-sky-poor { stroke: #EF4444; stroke-width: 3; stroke-dasharray: 5, 5; }
+      .calc-details { background-color: #f9fafb; border: 1px solid #e5e7eb; padding: 12px; border-radius: 6px; font-size: 0.8rem; line-height: 1.4; color: #374151; max-height: 300px; overflow-y: auto; }
+      .calc-details strong { color: #1f2937; }
+      .calc-details code { background-color: #e5e7eb; padding: 1px 4px; border-radius: 3px; font-family: monospace; }
+      #resultsTableContainer { max-height: 300px; overflow-y: auto; }
+      #resultsTable th { position: sticky; top: 0; background-color: #f3f4f6; z-index: 10; }
+      input[type=number], select { min-width: 60px; }
+      .loader { border: 4px solid #f3f3f3; border-radius: 50%; border-top: 4px solid #6366f1; width: 24px; height: 24px; animation: spin 1s linear infinite; display: none; margin: 5px auto; }
+      @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="bg-gray-100 font-['Inter',_sans-serif] p-4 md:p-8">
+    <div class="max-w-7xl mx-auto bg-white rounded-lg shadow-md overflow-hidden">
+        <h1 class="text-2xl font-bold text-center text-white bg-indigo-600 p-4">HF Radio Transmission Simulator (Flask + Advanced Model)</h1>
+
+        <div class="p-6 grid grid-cols-1 lg:grid-cols-3 gap-x-6 gap-y-4">
+
+            <div class="lg:col-span-1 space-y-4">
+                <h2 class="text-xl font-semibold text-gray-700 border-b pb-2">Parameters</h2>
+
+                <div class="space-y-3 p-3 border rounded-md border-gray-200">
+                    <h3 class="text-sm font-medium text-gray-600">Transmitter Location (Lat/Lon)</h3>
+                    <div class="grid grid-cols-2 gap-2">
+                        <input type="number" id="txLat" placeholder="Latitude" step="any" class="p-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500" value="35.17">
+                        <input type="number" id="txLon" placeholder="Longitude" step="any" class="p-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500" value="-79.41">
+                    </div>
+                     <h3 class="text-sm font-medium text-gray-600 pt-2">Receiver Location (Lat/Lon)</h3>
+                     <div class="grid grid-cols-2 gap-2">
+                        <input type="number" id="rxLat" placeholder="Latitude" step="any" class="p-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500" value="40.71">
+                        <input type="number" id="rxLon" placeholder="Longitude" step="any" class="p-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500" value="-74.00">
+                    </div>
+                </div>
+
+                <div class="space-y-3 p-3 border rounded-md border-gray-200">
+                     <h3 class="text-sm font-medium text-gray-600">Simulation Settings</h3>
+                     <div>
+                        <label for="txPower" class="block text-xs font-medium text-gray-500 mb-1">Tx Power (Watts)</label>
+                        <input type="number" id="txPower" placeholder="e.g., 100" step="any" min="0.1" class="w-full p-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500" value="100">
+                    </div>
+                     <div class="grid grid-cols-3 gap-2">
+                        <div>
+                            <label for="startFreq" class="block text-xs font-medium text-gray-500 mb-1">Start Freq (MHz)</label>
+                            <input type="number" id="startFreq" placeholder="7.0" step="0.1" min="1.8" max="30" class="w-full p-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500" value="7.0">
+                        </div>
+                         <div>
+                            <label for="endFreq" class="block text-xs font-medium text-gray-500 mb-1">End Freq (MHz)</label>
+                            <input type="number" id="endFreq" placeholder="14.3" step="0.1" min="1.8" max="30" class="w-full p-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500" value="14.3">
+                        </div>
+                         <div>
+                            <label for="freqSteps" class="block text-xs font-medium text-gray-500 mb-1">Steps</label>
+                            <input type="number" id="freqSteps" placeholder="5" step="1" min="1" max="100" class="w-full p-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500" value="10"> </div>
+                    </div>
+                     <p class="text-xs text-gray-500 italic mt-1">Simulation uses current UTC time.</p>
+                </div>
+
+                 <div class="space-y-3 p-3 border rounded-md border-gray-200">
+                     <h3 class="text-sm font-medium text-gray-600">Antennas & Noise</h3>
+                     <div class="grid grid-cols-2 gap-x-4 gap-y-2">
+                         <div>
+                            <label for="txAntennaType" class="block text-xs font-medium text-gray-500 mb-1">Tx Antenna Type</label>
+                            <select id="txAntennaType" class="w-full p-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white">
+                                <option>Dipole</option>
+                                <option>Vertical</option>
+                                <option>Yagi (Simple)</option>
+                            </select>
+                         </div>
+                         <div>
+                            <label for="txAntennaHeight" class="block text-xs font-medium text-gray-500 mb-1">Tx Height</label>
+                            <select id="txAntennaHeight" class="w-full p-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white">
+                                <option>Low (&lt;0.25λ)</option>
+                                <option selected>Medium (≈0.5λ)</option>
+                                <option>High (&gt;0.75λ)</option>
+                            </select>
+                         </div>
+                          <div>
+                            <label for="rxAntennaType" class="block text-xs font-medium text-gray-500 mb-1">Rx Antenna Type</label>
+                            <select id="rxAntennaType" class="w-full p-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white">
+                                <option>Dipole</option>
+                                <option selected>Vertical</option>
+                                <option>Yagi (Simple)</option>
+                            </select>
+                         </div>
+                         <div>
+                            <label for="rxAntennaHeight" class="block text-xs font-medium text-gray-500 mb-1">Rx Height</label>
+                            <select id="rxAntennaHeight" class="w-full p-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white">
+                                <option>Low (&lt;0.25λ)</option>
+                                <option selected>Medium (≈0.5λ)</option>
+                                <option>High (&gt;0.75λ)</option>
+                            </select>
+                         </div>
+                     </div>
+                     <div>
+                        <label for="noiseEnvironment" class="block text-xs font-medium text-gray-500 mb-1">Receiver Noise Environment</label>
+                        <select id="noiseEnvironment" class="w-full p-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 bg-white">
+                            <option value="Quiet Rural">Quiet Rural</option>
+                            <option value="Rural">Rural</option>
+                            <option value="Residential" selected>Residential</option>
+                            <option value="Urban">Urban</option>
+                            <option value="Industrial">Industrial</option>
+                        </select>
+                    </div>
+                 </div>
+
+                <button id="simulateBtn" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-md transition duration-150 ease-in-out flex items-center justify-center space-x-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="1.25em" height="1.25em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon-sm"><path d="M4.9 16.1C1 12.2 1 5.8 4.9 1.9"/><path d="M7.8 4.7a6.3 6.3 0 0 1 8.5 0"/><path d="M10.6 7.5c1.1.8 2.6.8 3.7 0"/><path d="M12 10.3V22"/><path d="M8.4 22H15"/><path d="M19.1 1.9c3.9 3.9 3.9 10.2 0 14.1"/><path d="M16.2 4.7a6.3 6.3 0 0 1 0 8.5"/><path d="M13.4 7.5c.6.4 1.1.8 1.1.8"/></svg>
+                    <span>Run Simulation</span>
+                </button>
+                 <div id="loadingIndicator" class="loader"></div>
+                 <div id="messageBox" class="hidden p-3 mt-4 rounded-md text-sm"></div>
+            </div>
+
+            <div class="lg:col-span-2 space-y-4">
+                 <h2 class="text-xl font-semibold text-gray-700 border-b pb-2">Results</h2>
+                 <div id="map" class="rounded-md border border-gray-300"></div>
+
+                 <div id="singleResultDisplay" class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm text-gray-700">
+                    <div><strong>Distance:</strong> <span id="distanceResult">-</span> km</div>
+                    <div><strong>Skywave Path Likelihood:</strong> <span id="likelihoodResult" class="likelihood-indicator">-</span></div>
+                    <div><strong>Skywave SNR (Est.):</strong> <span id="skyWaveResult">-</span> dB</div>
+                    <div class="sm:col-span-2"><strong>Ground Wave SNR (Est.):</strong> <span id="groundWaveResult">-</span> dB</div>
+                 </div>
+
+                 <div id="resultsTableContainer" class="hidden w-full border border-gray-200 rounded-md">
+                     <table id="resultsTable" class="min-w-full divide-y divide-gray-200 text-xs">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th scope="col" class="px-3 py-2 text-left font-medium text-gray-500 uppercase tracking-wider">Freq (MHz)</th>
+                                <th scope="col" class="px-3 py-2 text-left font-medium text-gray-500 uppercase tracking-wider">GW SNR (dB)</th>
+                                <th scope="col" class="px-3 py-2 text-left font-medium text-gray-500 uppercase tracking-wider">Mode</th>
+                                <th scope="col" class="px-3 py-2 text-left font-medium text-gray-500 uppercase tracking-wider">Absorp (dB)</th>
+                                <th scope="col" class="px-3 py-2 text-left font-medium text-gray-500 uppercase tracking-wider">SW Loss (dB)</th>
+                                <th scope="col" class="px-3 py-2 text-left font-medium text-gray-500 uppercase tracking-wider">SW SNR (dB)</th>
+                                <th scope="col" class="px-3 py-2 text-left font-medium text-gray-500 uppercase tracking-wider">Likelihood</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-gray-200">
+                            </tbody>
+                    </table>
+                 </div>
+
+                 <p class="text-xs text-gray-500 italic mt-2">Note: SNR estimates use simplified models & real-time indices. Assumes ~3kHz bandwidth.</p>
+
+                 <h3 class="text-lg font-semibold text-gray-700 border-b pb-1 mt-4">Calculation Details (Center Frequency)</h3>
+                 <div id="calcDetailsContainer" class="calc-details">
+                    <p>Run simulation to see calculation details.</p>
+                 </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/main.js"></script>
+</body>
+</html>
