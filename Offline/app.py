@@ -381,4 +381,4 @@ if __name__ == '__main__':
     # IMPORTANT: debug=True is for development only!
     # Remove or set to False for production deployment.
     # Use a proper WSGI server like Gunicorn or Waitress instead of app.run() in production.
-    app.run(host='0.0.0.0', port=5000, debug=True) # Set debug=False for production
+    app.run(host='0.0.0.0', port=5000, debug=False) # Set debug=False for production
