@@ -25,6 +25,10 @@ const resultsTableContainer = document.getElementById('resultsTableContainer');
 const resultsTableBody = resultsTableContainer.querySelector('tbody');
 const calcDetailsContainer = document.getElementById('calcDetailsContainer');
 const calcDetailsTitle = calcDetailsContainer?.previousElementSibling; // H3 Title
+const themeToggleButton = document.getElementById('theme-toggle');
+const themeToggleDarkIcon = document.getElementById('theme-toggle-dark-icon');
+const themeToggleLightIcon = document.getElementById('theme-toggle-light-icon');
+
 
 // --- Map Initialization ---
 let map = null; // Initialize later globally
@@ -42,6 +46,17 @@ function initializeMap() {
     if (document.getElementById('map') && !map) {
         console.log("Initializing Leaflet map...");
         try {
+            // --- Explicitly set default icon paths ---
+            // This can fix issues where Leaflet fails to auto-detect paths, especially with bundlers or complex setups.
+            delete L.Icon.Default.prototype._getIconUrl;
+            L.Icon.Default.mergeOptions({
+                iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+                iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+                shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+            });
+            console.log("Leaflet default icon paths set.");
+            // --- End Icon Path Fix ---
+
             map = L.map('map').setView([38, -95], 4); // Center on US initially
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 maxZoom: 19,
@@ -70,11 +85,11 @@ function showMessage(text, type = 'error') {
     messageBox.textContent = text;
     messageBox.className = 'p-3 mt-4 rounded-md text-sm'; // Reset classes
     if (type === 'error') {
-        messageBox.classList.add('bg-red-100', 'text-red-700');
+        messageBox.classList.add('bg-red-100', 'dark:bg-red-900', 'text-red-700', 'dark:text-red-200');
     } else if (type === 'warning') {
-        messageBox.classList.add('bg-yellow-100', 'text-yellow-700');
+        messageBox.classList.add('bg-yellow-100', 'dark:bg-yellow-900', 'text-yellow-700', 'dark:text-yellow-200');
     } else { // info
-        messageBox.classList.add('bg-blue-100', 'text-blue-700');
+        messageBox.classList.add('bg-blue-100', 'dark:bg-blue-900', 'text-blue-700', 'dark:text-blue-200');
     }
     messageBox.classList.remove('hidden');
 }
@@ -320,24 +335,73 @@ function updateCalcDetails(details) {
         <p><strong>Tx Power:</strong> ${details.txPowerW ?? '-'} W (${(10 * Math.log10((details.txPowerW ?? 1) * 1000)).toFixed(1)} dBm)</p> <p><strong>Time (UTC):</strong> ${new Date().toISOString()} (${details.timeOfDay ?? '-'})</p>
         <p><strong>Solar Zenith Angle:</strong> ${details.solarZenithAngle?.toFixed(1) ?? '-'}°</p>
         <p><strong>Indices Used:</strong> SFI=${details.sfi ?? '-'}, SSN=${details.ssn ?? '-'}, Kp=${details.kp ?? '-'}</p>
-        <hr class="my-2 border-gray-300">
+        <hr class="my-2 border-gray-300 dark:border-gray-600">
         <p><strong>Tx Antenna:</strong> ${details.txAntennaType ?? '-'} (${details.txAntennaHeight ?? '-'}) | <strong>Gain:</strong> ${details.txGainDbi?.toFixed(1) ?? '-'} dBi</p>
         <p><strong>Rx Antenna:</strong> ${details.rxAntennaType ?? '-'} (${details.rxAntennaHeight ?? '-'}) | <strong>Gain:</strong> ${details.rxGainDbi?.toFixed(1) ?? '-'} dBi</p>
         <p><strong>Rx Noise Env:</strong> ${details.noiseEnvironment ?? '-'} | <strong>Noise Fig:</strong> ${details.noiseFigureDb?.toFixed(1) ?? '-'} dB</p>
         <p><strong>Noise Floor:</strong> kTB + NoiseFig = ${details.noiseFloorDbm?.toFixed(1) ?? '-'} dBm</p>
-        <hr class="my-2 border-gray-300">
+        <hr class="my-2 border-gray-300 dark:border-gray-600">
         <p><strong>Est. MUF (F2):</strong> ${details.MUF_F2?.toFixed(1) ?? '-'} MHz | <strong>Est. FOT (F2):</strong> ${details.FOT_F2?.toFixed(1) ?? '-'} MHz</p>
         <p><strong>Est. MUF (E):</strong> ${details.MUF_E?.toFixed(1) ?? '-'} MHz</p>
         <p><strong>Base FSPL:</strong> ${formatLoss(details.fsplDb)} dB</p>
         <p><strong>Absorption (Est.):</strong> ${formatLoss(details.absorptionDb)} dB</p>
-        <hr class="my-2 border-gray-300">
+        <hr class="my-2 border-gray-300 dark:border-gray-600">
         <p><strong>Ground Wave Loss:</strong> FSPL + Extra ≈ ${formatLoss(details.groundWaveTotalLossDb)} dB</p>
         <p><strong>Skywave Mode:</strong> ${details.skywaveMode ?? '-'}</p>
         <p><strong>Skywave Loss:</strong> FSPL + ModeLoss + Absorp ≈ ${formatLoss(details.skywaveTotalLossDb)} dB</p>
-        <hr class="my-2 border-gray-300">
+        <hr class="my-2 border-gray-300 dark:border-gray-600">
         <p><strong>Ground Wave SNR (Est.):</strong> ${formatSNR(details.groundWaveSNR)} dB</p>
         <p><strong>Skywave SNR (Est.):</strong> ${formatSNR(details.skywaveSNR)} dB</p>
     `;
+}
+
+// --- Dark Mode Logic ---
+/**
+ * Sets the theme (light/dark) by adding/removing the 'dark' class and saving preference.
+ * @param {'light' | 'dark'} theme - The desired theme.
+ */
+function setTheme(theme) {
+    // Remove existing theme class
+    document.documentElement.classList.remove('light', 'dark');
+
+    if (theme === 'dark') {
+        document.documentElement.classList.add('dark');
+        localStorage.setItem('color-theme', 'dark');
+        themeToggleLightIcon?.classList.remove('hidden');
+        themeToggleDarkIcon?.classList.add('hidden');
+    } else {
+        document.documentElement.classList.add('light'); // Optional: explicitly add 'light'
+        localStorage.setItem('color-theme', 'light');
+        themeToggleDarkIcon?.classList.remove('hidden');
+        themeToggleLightIcon?.classList.add('hidden');
+    }
+     console.log(`Theme set to: ${theme}`);
+     // Add/remove dark class from map container if needed for specific map styles
+     // document.getElementById('map')?.classList.toggle('dark-map', theme === 'dark');
+}
+
+/**
+ * Toggles the theme between light and dark.
+ */
+function toggleTheme() {
+    const currentTheme = localStorage.getItem('color-theme') ||
+                         (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+    setTheme(newTheme);
+}
+
+/**
+ * Applies the initial theme based on saved preference or OS setting.
+ */
+function applyInitialTheme() {
+    const savedTheme = localStorage.getItem('color-theme');
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+
+    if (savedTheme) {
+        setTheme(savedTheme);
+    } else {
+        setTheme(prefersDark ? 'dark' : 'light');
+    }
 }
 
 
@@ -351,7 +415,7 @@ async function handleSimulation() {
     simulateBtn.disabled = true; // Disable button during request
     console.log("Simulation requested...");
 
-    // --- Get Inputs ---
+    // Get Inputs
     const params = {
         txLat: parseFloat(txLatInput.value),
         txLon: parseFloat(txLonInput.value),
@@ -369,8 +433,7 @@ async function handleSimulation() {
     };
     console.log("Input Params:", params);
 
-
-    // --- Basic Frontend Input Validation ---
+    // Frontend Validation
     let validationError = null;
     if (isNaN(params.txLat) || isNaN(params.txLon) || !validateCoords(params.txLat, params.txLon)) { validationError = "Invalid Transmitter coordinates."; }
     else if (isNaN(params.rxLat) || isNaN(params.rxLon) || !validateCoords(params.rxLat, params.rxLon)) { validationError = "Invalid Receiver coordinates."; }
@@ -389,38 +452,30 @@ async function handleSimulation() {
          return;
     }
 
-
-    // --- Call Backend API ---
+    // Call Backend API
     try {
         console.log("Sending request to /simulate");
         const response = await fetch('/simulate', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
+            headers: { 'Content-Type': 'application/json', },
             body: JSON.stringify(params),
         });
         console.log("Response status:", response.status);
-
 
         if (!response.ok) {
             let errorMsg = `HTTP error! Status: ${response.status}`;
             let errorDetails = "";
             try {
-                // Try to get more specific error from backend JSON response
                 const errorData = await response.json();
                 errorDetails = errorData.error || JSON.stringify(errorData);
                 errorMsg = `${errorMsg} - ${errorDetails}`;
                 console.error("Backend error response:", errorData);
             } catch (e) {
-                 // If response is not JSON, read as text
                  try {
                      errorDetails = await response.text();
-                     errorMsg = `${errorMsg} - ${errorDetails.substring(0, 200)}`; // Limit length
+                     errorMsg = `${errorMsg} - ${errorDetails.substring(0, 200)}`;
                      console.error("Backend error response (non-JSON):", errorDetails);
-                 } catch (e_text) {
-                      console.error("Could not read backend error response body.");
-                 }
+                 } catch (e_text) { console.error("Could not read backend error response body."); }
             }
             throw new Error(errorMsg);
         }
@@ -428,14 +483,11 @@ async function handleSimulation() {
         const resultsArray = await response.json();
         console.log("Received results:", resultsArray);
 
-
-        // --- Update UI with results ---
+        // Update UI
          if (resultsArray && resultsArray.length > 0) {
-             // Use the coordinates from the *first* result for map update,
-             // as they are fixed for the whole simulation run.
              const firstResult = resultsArray[0];
              const centerIndex = Math.floor(resultsArray.length / 2);
-             const centerResult = resultsArray[centerIndex];
+             const centerResult = resultsArray[centerIndex]; // Use center result for map line coloring
 
              if (resultsArray.length === 1) {
                  updateSingleResultDisplay(firstResult);
@@ -470,10 +522,20 @@ async function handleSimulation() {
 // --- Event Listeners ---
 simulateBtn.addEventListener('click', handleSimulation);
 
+// Add listener for the theme toggle button
+if (themeToggleButton) {
+    themeToggleButton.addEventListener('click', toggleTheme);
+} else {
+     console.error("Theme toggle button not found!");
+}
+
+
 // --- Initial Setup ---
 document.addEventListener('DOMContentLoaded', () => {
     console.log("DOM fully loaded and parsed.");
     initializeMap(); // Initialize the map once the DOM is ready
+    applyInitialTheme(); // Apply light/dark theme on load
     // Optionally run a simulation with default values on load after map init
-    // setTimeout(handleSimulation, 100); // Slight delay to ensure map tiles might load
+    // Use a small delay to allow map tiles to potentially start loading
+    // setTimeout(handleSimulation, 150); // Uncomment to run on load
 });
